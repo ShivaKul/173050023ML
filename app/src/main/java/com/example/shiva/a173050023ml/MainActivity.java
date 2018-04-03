@@ -4,9 +4,9 @@ import android.content.Intent;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
-import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
+import umich.cse.yctung.androidlibsvm.LibSVM;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -34,6 +34,8 @@ public class MainActivity extends AppCompatActivity {
             if (resultCode == RESULT_OK) {
                 TextView textView = findViewById(R.id.training_file_textview);
                 textView.setText((data.getDataString()));
+                LibSVM svm = new LibSVM();
+
             }
             else{
                 Toast.makeText(getApplicationContext(), "Please select the training file", Toast.LENGTH_SHORT).show();
