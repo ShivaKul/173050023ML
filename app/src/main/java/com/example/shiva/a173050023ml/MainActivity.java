@@ -3,9 +3,19 @@ package com.example.shiva.a173050023ml;
 import android.content.Intent;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+
 import umich.cse.yctung.androidlibsvm.LibSVM;
 
 public class MainActivity extends AppCompatActivity {
@@ -34,7 +44,15 @@ public class MainActivity extends AppCompatActivity {
             if (resultCode == RESULT_OK) {
                 TextView textView = findViewById(R.id.training_file_textview);
                 textView.setText((data.getDataString()));
-                LibSVM svm = new LibSVM();
+                try {
+                    BufferedReader br = new BufferedReader(new InputStreamReader(getContentResolver().openInputStream(data.getData())));
+                    //Toast.makeText(getApplicationContext(), br.readLine() + "Hello", Toast.LENGTH_LONG).show();
+                    textView.setText(br.readLine() + "Hello");
+                } catch (java.io.IOException e) {
+                    Log.v("ML ", "IOWrong");
+                    e.printStackTrace();
+                }
+
 
             }
             else{
