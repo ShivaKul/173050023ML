@@ -19,6 +19,7 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import umich.cse.yctung.androidlibsvm.LibSVM;
@@ -26,6 +27,7 @@ import umich.cse.yctung.androidlibsvm.LibSVM;
 public class MainActivity extends AppCompatActivity {
 
     private static final int PICK_TRAINING_FILE_REQUEST_CODE= 0;
+    private static final int PICK_TESTING_FILE_REQUEST_CODE= 1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,22 +43,52 @@ public class MainActivity extends AppCompatActivity {
         startActivityForResult(chooseFile, PICK_TRAINING_FILE_REQUEST_CODE);
     }
 
-    public String convertLineToLibSVM(String csvLine)
+    public void onTestingButtonClicked(View view)
     {
-        String vals[] = csvLine.split(",");
+        Intent chooseFile = new Intent(Intent.ACTION_GET_CONTENT);
+        chooseFile.setType("*/*");
+        chooseFile = Intent.createChooser(chooseFile, "Choose a file");
+        startActivityForResult(chooseFile, PICK_TESTING_FILE_REQUEST_CODE);
+    }
+
+
+    public String convertAccelToString(ArrayList<AccelReading> readings, int i, int len)
+    {
         String label;
-        if(vals[vals.length - 1].equals("walking"))
+        if(readings.get(i).label.equals("walking"))
             label = "+1";
         else
             label = "-1";
         StringBuilder sb = new StringBuilder();
         sb.append(label);
-        for(int i = 3; i < vals.length - 1; i++)
-            sb.append(" " + (i - 2) + ":" + vals[i]);
+        double var_x = 0, mean_x = 0, var_y = 0, mean_y = 0, var_z = 0, mean_z = 0;
+        int n = readings.size(), j = 0;
+        while(j < len && j + i < n)
+        {
+            mean_x += readings.get(i + j).x;
+            mean_y += readings.get(i + j).y;
+            mean_z += readings.get(i + j).z;
+            j++;
+        }
+        mean_x /= j;
+        mean_y /= j;
+        mean_z /= j;
+        j = 0;
+        while(j < len && j + i < n)
+        {
+            var_x += Math.pow((readings.get(i + j).x - mean_x), 2);
+            var_y += Math.pow((readings.get(i + j).y - mean_y), 2);
+            var_z += Math.pow((readings.get(i + j).z - mean_z), 2);
+            j++;
+        }
+        var_x /= j;
+        var_y /= j;
+        var_z /= j;
+        sb.append(" 1:" + (var_x + var_y + var_z));
         return sb.toString();
     }
 
-    public String generateTrainingFile(Uri uri)
+    public String generateTrainingFile(Uri uri, int windowSize)
     {
         String filePath = null;
         File folder = new File(getApplicationContext().getFilesDir() + File.separator + "TrainingFiles");
@@ -77,46 +109,24 @@ public class MainActivity extends AppCompatActivity {
             br.readLine();
             br.readLine();
             ArrayList<AccelReading> readings = new ArrayList<>();
+            //Log.v("ArrayList", "ArrayList created");
             while ((line = br.readLine()) != null)
             {
+                //Log.v("AddingLines", "Current line is " + line);
                 readings.add(new AccelReading(line));
             }
-            int windowSize = 50;
+            //Log.v("Size of file", "Size of trainingCSV is " + readings.size());
             int n = readings.size();
-            int i = 0;
-            double avg_x = 0, avg_y = 0 , avg_z = 0;
-            while( i < n)
+            ArrayList<String> strList = new ArrayList<>();
+            for(int i = 0; i < n; i += windowSize)
             {
-                if(i % (windowSize - 1) == 0 && i > 0)
-                {
-                    avg_x = avg_x/windowSize;
-                    avg_y = avg_y/windowSize;
-                    avg_z = avg_z/windowSize;
-                    double var_x = 0, var_y = 0, var_z = 0;
-                    for(int j = i - windowSize + 1; j <= i; j++)
-                    {
-                        var_x = Math.pow((readings.get(i).x - avg_x), 2);
-                        var_y = Math.pow((readings.get(i).y - avg_y), 2);
-                        var_z = Math.pow((readings.get(i).z - avg_z), 2);
-                    }
-                    var_x /= windowSize;
-                    var_y /= windowSize;
-                    var_z /= windowSize;
-                    StringBuilder sb = new StringBuilder();
-                    if(readings.get(i).label.equals("walking"))
-                        sb.append("+1 ");
-                    else
-                        sb.append("-1 ");
-                    sb.append("1:" + avg_x + " 2:" + avg_y + " 3:" + avg_z + " 4:" + var_x + " 5:" + var_y + " 6:" + var_z);
-                    writer.write(sb.toString());
-                    writer.write("\n");
-                    avg_x = avg_y = avg_z = 0.0;
-                }
-                avg_x += readings.get(i).x;
-                avg_y += readings.get(i).y;
-                avg_z += readings.get(i).z;
-                i += windowSize - 1;
+                //Log.v("Value of i", "i is now " + i);
+                strList.add(convertAccelToString(readings, i, windowSize) + "\n");
             }
+            Collections.shuffle(strList);
+            n = strList.size();
+            for(int i = 0; i < n; i++)
+                writer.write(strList.get(i));
             writer.close();
         } catch (java.io.IOException e) {
             e.printStackTrace();
@@ -131,16 +141,28 @@ public class MainActivity extends AppCompatActivity {
             if (resultCode == RESULT_OK) {
                 TextView textView = findViewById(R.id.training_file_textview);
                 textView.setText((data.getDataString()));
-                //String filePath = generateTrainingFile(data.getData());
+                //Log.v("Point1", "Now going to call generateTrainingFile");
+                String filePath = generateTrainingFile(data.getData(), 10);
+                //Log.v("Point2", "Now returning from generateTrainingFile");
                 //Log.v("This is the fp", filePath);
                 LibSVM svm = LibSVM.getInstance();
                 String folderPath = "sdcard/ActML" + File.separator;
-                //svm.scale(filePath, folderPath + "scaled_file");
-                //svm.train("-t 2 "/* svm kernel */ + folderPath + "scaled_file " + folderPath + "model");
+                svm.scale(filePath, folderPath + "scaled_file");
+                svm.train("-t 2 " + folderPath + "scaled_file " + folderPath + "model");}
+            else{
+                Toast.makeText(getApplicationContext(), "Please select the training file", Toast.LENGTH_SHORT).show();
+            }
+        }
+        else if (requestCode == PICK_TESTING_FILE_REQUEST_CODE){
+            if(resultCode == RESULT_OK){
+                TextView textView = findViewById(R.id.testing_file_textview);
+                textView.setText(R.string.app_name);
+                LibSVM svm = LibSVM.getInstance();
+                String folderPath = "sdcard/ActML" + File.separator;
                 svm.predict(folderPath + "testingFile.libSVM " + folderPath + "model " + folderPath + "result");
             }
             else{
-                Toast.makeText(getApplicationContext(), "Please select the training file", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getApplicationContext(), "Please select the testing file", Toast.LENGTH_SHORT).show();
             }
         }
     }
